@@ -78,7 +78,7 @@ def server_start():
 
             if invalid_input:
                 break
-            print("Waiting for the next message...")        # Print to see that server is waiting on next message
+            print("\n\nWaiting for the next message...")            # Print to see that server is waiting on next message
 
             
         print("Connection Terminated.")     # Close connection if invalid number is entered by client

@@ -33,7 +33,7 @@ def start_client():
                 # Wait for the server's response
                 data = sock.recv(1024)                      # Give 1K buffer
                 reply = data.decode('utf-8')                # Decode reply
-                print(f"Server reply: {reply}")             # Print server reply
+                print(f"Server reply: {reply}\n\n")             # Print server reply
 
         # Exception cases for the try block
         except ValueError:
