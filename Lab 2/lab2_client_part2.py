@@ -7,8 +7,8 @@ import sys
 
 # Client setup
 # server_ip = '10.231.137.238'
-server_ip = '127.0.0.1'
-server_port = 12345
+server_ip = '192.168.1.15'
+server_port = 8020
 
 client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 client_socket.connect((server_ip, server_port))
