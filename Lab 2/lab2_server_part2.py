@@ -3,7 +3,7 @@ import threading
 
 # Server setup
 #server_ip = '10.231.137.238'
-server_ip = '127.0.0.1'
+server_ip = '192.168.1.15'
 server_port = 8020
 server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 server_socket.bind((server_ip, server_port))
