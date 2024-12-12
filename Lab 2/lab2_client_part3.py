@@ -1,74 +1,101 @@
 import socket
 import threading
 import tkinter as tk
-from tkinter import simpledialog, scrolledtext
+from tkinter import scrolledtext, messagebox
+import select
+import sys
 
-class ChatClient:
-    def __init__(self, master):
-        self.master = master
-        self.master.title("Chat Client")
+# Client setup
+# server_ip = '10.231.137.238'
+server_ip = '192.168.1.15'
+server_port = 8020
 
-        # Chat display area
-        self.chat_area = scrolledtext.ScrolledText(master, wrap=tk.WORD, state=tk.DISABLED)
-        self.chat_area.pack(padx=10, pady=10, fill=tk.BOTH, expand=True)
+client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+client_socket.connect((server_ip, server_port))
 
-        # Message entry area
-        self.message_entry = tk.Entry(master)
-        self.message_entry.pack(padx=10, pady=10, fill=tk.X)
-        self.message_entry.bind("<Return>", self.send_message)
+# GUI setup
+class ChatClientGUI:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("csce513fall24Msg Chat Client")
+        
+        # Chat history area
+        self.chat_display = scrolledtext.ScrolledText(self.root, wrap=tk.WORD, state='disabled', width=50, height=15)
+        self.chat_display.grid(row=0, column=0, columnspan=2, padx=10, pady=10)
 
-        # Connect to the server
-        self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        server_address = ('192.168.1.15', 8020)
+        # Recipient entry
+        tk.Label(self.root, text="Recipient:").grid(row=1, column=0, sticky='e')
+        self.recipient_entry = tk.Entry(self.root, width=30)
+        self.recipient_entry.grid(row=1, column=1, pady=5, padx=10)
 
-        # Prompt for a username
-        self.username = simpledialog.askstring("Username", "Enter your name:", parent=master)
-        if not self.username:
-            self.username = "Anonymous"
+        # Message input area
+        self.message_entry = tk.Entry(self.root, width=40)
+        self.message_entry.grid(row=2, column=0, pady=5, padx=10)
+        self.message_entry.bind("<Return>", self.send_message)  # Send on Enter key
 
-        try:
-            self.client_socket.connect(server_address)
-            self.client_socket.send(self.username.encode('utf-8'))  # Send username to server
-            self.add_message(f"Connected to the server as {self.username}!")
-        except Exception as e:
-            self.add_message(f"Failed to connect: {e}")
-            return
+        # Send button
+        self.send_button = tk.Button(self.root, text="Send", command=self.send_message)
+        self.send_button.grid(row=2, column=1, pady=5)
 
-        # Start a thread to receive messages
-        self.receive_thread = threading.Thread(target=self.receive_messages, daemon=True)
+        # Start receiving messages
+        self.running = True
+        self.receive_thread = threading.Thread(target=self.receive_messages)
+        self.receive_thread.daemon = True
         self.receive_thread.start()
 
-    def add_message(self, message):
-        """Adds a message to the chat display."""
-        self.chat_area.config(state=tk.NORMAL)
-        self.chat_area.insert(tk.END, message + "\n")
-        self.chat_area.config(state=tk.DISABLED)
-        self.chat_area.yview(tk.END)
+    def display_message(self, message):
+        self.chat_display.config(state='normal')
+        self.chat_display.insert(tk.END, message + "\n")
+        self.chat_display.yview(tk.END)
+        self.chat_display.config(state='disabled')
 
     def send_message(self, event=None):
-        """Sends a message to the server."""
+        recipient = self.recipient_entry.get().strip()
         message = self.message_entry.get().strip()
-        if message:
-            try:
-                formatted_message = f"{self.username}: {message}"
-                self.client_socket.send(formatted_message.encode('utf-8'))
-                self.message_entry.delete(0, tk.END)
-            except Exception as e:
-                self.add_message(f"Error sending message: {e}")
+        
+        if not recipient or not message:
+            messagebox.showwarning("Warning", "Both recipient and message fields must be filled.")
+            return
+        
+        formatted_message = f"{recipient}:{message}"
+        client_socket.send(formatted_message.encode())
+        self.display_message(f"You -> {recipient}: {message}")
+        self.message_entry.delete(0, tk.END)
 
     def receive_messages(self):
-        """Continuously receives messages from the server."""
-        while True:
-            try:
-                message = self.client_socket.recv(1024).decode('utf-8')
-                if message:
-                    self.add_message(message)
-            except Exception as e:
-                self.add_message(f"Error receiving message: {e}")
-                break
+        while self.running:
+            # Use select to monitor the socket and stdin for input
+            read_sockets, _, _ = select.select([client_socket], [], [], 0.5)
+            for sock in read_sockets:
+                if sock == client_socket:
+                    try:
+                        message = client_socket.recv(1024).decode()
+                        if message:
+                            self.display_message(message)
+                        else:
+                            self.running = False
+                            break
+                    except Exception as e:
+                        print(f"Error receiving message: {e}")
+                        self.running = False
+                        break
 
-# Main GUI loop
-if __name__ == "__main__":
-    root = tk.Tk()
-    chat_client = ChatClient(root)
-    root.mainloop()
+    def close_connection(self):
+        self.running = False
+        client_socket.close()
+        self.root.destroy()
+
+# Initialize client
+client_name = input("Enter your name: ").strip()
+if not client_name:
+    print("Name cannot be empty. Please restart the client.")
+    exit()
+
+client_socket.send(client_name.encode())
+
+
+# Start GUI
+root = tk.Tk()
+app = ChatClientGUI(root)
+root.protocol("WM_DELETE_WINDOW", app.close_connection)  # Close socket on window close
+root.mainloop()

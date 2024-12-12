@@ -1,57 +1,54 @@
-import socket
+import socketserver
 import threading
 
-clients = {}  # Dictionary to store client sockets and their usernames
+# Dictionary to store connected clients
+clients = {}
 
-def handle_client(client_socket, client_address):
-    """Handles communication with a single client."""
-    try:
-        # Receive username from client
-        username = client_socket.recv(1024).decode('utf-8')
-        clients[client_socket] = username
-        print(f"{username} has connected from {client_address}.")
+# Thread-safe lock for client dictionary
+lock = threading.Lock()
 
-        # Notify others about the new connection
-        broadcast_message(f"{username} has joined the chat!", client_socket)
 
-        # Handle incoming messages
-        while True:
-            message = client_socket.recv(1024).decode('utf-8')
-            if message:
-                print(f"{username}: {message}")
-                broadcast_message(message, client_socket)
-            else:
-                break
-    except Exception as e:
-        print(f"Error with {client_address}: {e}")
-    finally:
-        # Handle client disconnection
-        if client_socket in clients:
-            print(f"{username} has disconnected.")
-            broadcast_message(f"{username} has left the chat.", client_socket)
-            del clients[client_socket]
-            client_socket.close()
+class ChatHandler(socketserver.BaseRequestHandler):
+    def handle(self):
+        # Receive client's name
+        client_name = self.request.recv(1024).decode()
+        with lock:
+            clients[client_name] = self.request
+        print(f"{client_name} joined from {self.client_address}")
 
-def broadcast_message(message, sender_socket):
-    """Sends a message to all connected clients except the sender."""
-    for client_socket in clients:
-        if client_socket != sender_socket:
-            try:
-                client_socket.send(message.encode('utf-8'))
-            except Exception as e:
-                print(f"Error sending message: {e}")
+        try:
+            while True:
+                message = self.request.recv(1024).decode()
+                if message:
+                    print(f"{client_name} says: {message}")
+                    recipient_name, msg_content = message.split(":", 1)
 
-def start_server():
-    """Starts the server and listens for incoming connections."""
-    server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    server_socket.bind(('192.168.1.15', 8020))
-    server_socket.listen(5)
-    print("Server started. Waiting for connections...")
+                    with lock:
+                        if recipient_name in clients:
+                            clients[recipient_name].sendall(f"{client_name}: {msg_content}".encode())
+                        else:
+                            self.request.sendall(f"{recipient_name} not connected.".encode())
+                else:
+                    break
+        except Exception as e:
+            print(f"Error handling {client_name}: {e}")
+        finally:
+            # Remove client on disconnect
+            with lock:
+                print(f"{client_name} disconnected.")
+                del clients[client_name]
+                self.request.close()
 
-    while True:
-        client_socket, client_address = server_socket.accept()
-        print(f"New connection from {client_address}")
-        threading.Thread(target=handle_client, args=(client_socket, client_address), daemon=True).start()
 
+class ChatServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
+    allow_reuse_address = True
+
+
+# Server setup
 if __name__ == "__main__":
-    start_server()
+    server_ip = "1982.168.1.15"  # Change as needed for deployment
+    server_port = 8020
+
+    with ChatServer((server_ip, server_port), ChatHandler) as server:
+        print(f"Server running on {server_ip}:{server_port}")
+        server.serve_forever()
