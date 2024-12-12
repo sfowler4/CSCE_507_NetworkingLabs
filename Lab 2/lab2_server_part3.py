@@ -44,7 +44,7 @@ def broadcast_message(message, sender_socket):
 def start_server():
     """Starts the server and listens for incoming connections."""
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    server_socket.bind(('0.0.0.0', 12345))
+    server_socket.bind(('192.168.1.15', 8020))
     server_socket.listen(5)
     print("Server started. Waiting for connections...")
 
