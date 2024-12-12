@@ -46,7 +46,7 @@ class ChatServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
 
 # Server setup
 if __name__ == "__main__":
-    server_ip = "1982.168.1.15"  # Change as needed for deployment
+    server_ip = "192.168.1.15"  # Change as needed for deployment
     server_port = 8020
 
     with ChatServer((server_ip, server_port), ChatHandler) as server:
