@@ -1,7 +1,7 @@
 import socket
 import threading
 import tkinter as tk
-from tkinter import scrolledtext
+from tkinter import simpledialog, scrolledtext
 
 class ChatClient:
     def __init__(self, master):
@@ -19,10 +19,17 @@ class ChatClient:
 
         # Connect to the server
         self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        server_address = ('192.168.1.15', 8020)
+        server_address = ('127.0.0.1', 12345)
+
+        # Prompt for a username
+        self.username = simpledialog.askstring("Username", "Enter your name:", parent=master)
+        if not self.username:
+            self.username = "Anonymous"
+
         try:
             self.client_socket.connect(server_address)
-            self.add_message("Connected to the server!")
+            self.client_socket.send(self.username.encode('utf-8'))  # Send username to server
+            self.add_message(f"Connected to the server as {self.username}!")
         except Exception as e:
             self.add_message(f"Failed to connect: {e}")
             return
@@ -43,7 +50,8 @@ class ChatClient:
         message = self.message_entry.get().strip()
         if message:
             try:
-                self.client_socket.send(message.encode('utf-8'))
+                formatted_message = f"{self.username}: {message}"
+                self.client_socket.send(formatted_message.encode('utf-8'))
                 self.message_entry.delete(0, tk.END)
             except Exception as e:
                 self.add_message(f"Error sending message: {e}")
