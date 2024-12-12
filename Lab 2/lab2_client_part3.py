@@ -19,7 +19,7 @@ class ChatClient:
 
         # Connect to the server
         self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        server_address = ('127.0.0.1', 12345)
+        server_address = ('192.168.1.15', 8020)
         try:
             self.client_socket.connect(server_address)
             self.add_message("Connected to the server!")

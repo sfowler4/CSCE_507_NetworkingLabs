@@ -45,7 +45,7 @@ def remove_client(client_socket):
 def start_server():
     """Starts the chat server."""
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    server_address = ('127.0.0.1', 12345)
+    server_address = ('192.168.1.15', 8020)
     server_socket.bind(server_address)
     server_socket.listen(5)
     print(f"Server listening on {server_address}")
