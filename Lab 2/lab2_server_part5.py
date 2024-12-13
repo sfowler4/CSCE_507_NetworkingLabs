@@ -2,56 +2,74 @@ import socket
 import threading
 
 clients = {}  # Dictionary to store client_name: client_socket
-groups = {} # Dictionary to hold groups
+groups = {}  # Dictionary to hold groups
 
-def handle_client(client_socket, client_address):
-    client_name = client_socket.recv(1024).decode()
-    clients[client_name] = client_socket
-    print(f"{client_name} joined from {client_address}")
+group_lock = threading.Lock()  # Lock to ensure thread-safe access to groups
+
+def handle_client(client_socket, client_name):
+    print(f"{client_name} joined.")
 
     while True:
         try:
             message = client_socket.recv(1024).decode()
+            if not message:
+                break
+
             if message.startswith("/creategroup"):
                 _, group_name = message.split(" ", 1)
-                if group_name not in groups:
-                    groups[group_name] = [client_name]
-                    client_socket.send(f"Group '{group_name}' created.".encode())
-                else:
-                    client_socket.send(f"Group '{group_name}' already exists.".encode())
-            
+                with group_lock:
+                    if group_name not in groups:
+                        groups[group_name] = set()
+                        groups[group_name].add(client_name)
+                        client_socket.send(f"Group '{group_name}' created and you are added.".encode())
+                    else:
+                        client_socket.send(f"Group '{group_name}' already exists.".encode())
+
+            elif message.startswith("/joingroup"):
+                _, group_name = message.split(" ", 1)
+                with group_lock:
+                    if group_name in groups:
+                        groups[group_name].add(client_name)
+                        client_socket.send(f"You joined group '{group_name}'.".encode())
+                    else:
+                        client_socket.send(f"Group '{group_name}' does not exist.".encode())
+
             elif message.startswith("/addtogroup"):
                 _, group_name, new_member = message.split(" ", 2)
-                if group_name in groups and client_name in groups[group_name]:
-                    if new_member in clients:
-                        groups[group_name].append(new_member)
-                        client_socket.send(f"{new_member} added to group '{group_name}'.".encode())
+                with group_lock:
+                    if group_name in groups and client_name in groups[group_name]:
+                        if new_member in clients:
+                            groups[group_name].add(new_member)
+                            client_socket.send(f"{new_member} added to group '{group_name}'.".encode())
+                        else:
+                            client_socket.send(f"{new_member} is not connected.".encode())
                     else:
-                        client_socket.send(f"{new_member} is not connected.".encode())
-                else:
-                    client_socket.send(f"You do not have permission to modify group '{group_name}'.".encode())
-            
+                        client_socket.send(f"You do not have permission to modify group '{group_name}'.".encode())
+
             elif message.startswith("/groupmessage"):
                 _, group_name, msg_content = message.split(" ", 2)
-                if group_name in groups and client_name in groups[group_name]:
-                    for member in groups[group_name]:
-                        if member != client_name and member in clients:
-                            clients[member].send(f"[{group_name}] {client_name}: {msg_content}".encode())
-                else:
-                    client_socket.send(f"You are not a member of group '{group_name}'.".encode())
-            
+                with group_lock:
+                    if group_name in groups and client_name in groups[group_name]:
+                        for member in groups[group_name]:
+                            if member != client_name and member in clients:
+                                clients[member].send(f"[{group_name}] {client_name}: {msg_content}".encode())
+                    else:
+                        client_socket.send(f"You are not a member of group '{group_name}'.".encode())
+
             else:
                 client_socket.send("Unknown command.".encode())
 
-        except:
+        except Exception as e:
+            print(f"Error with {client_name}: {e}")
             break
 
     # Clean up after disconnection
-    del clients[client_name]
-    for group in groups.values():
-        if client_name in group:
-            group.remove(client_name)
+    with group_lock:
+        del clients[client_name]
+        for group in groups.values():
+            group.discard(client_name)
     client_socket.close()
+    print(f"{client_name} disconnected.")
 
 def start_server(server_ip, server_port):
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -59,7 +77,7 @@ def start_server(server_ip, server_port):
     server_socket.listen(5)  # Allow up to 5 clients to connect
 
     print(f"Server started at {server_ip}:{server_port}")
-    
+
     while True:
         # Accept incoming client connections
         client_socket, client_address = server_socket.accept()
@@ -67,7 +85,13 @@ def start_server(server_ip, server_port):
 
         # Ask for client name
         client_name = client_socket.recv(1024).decode().strip()
-        print(f"Client name received: {client_name}")
+        if client_name in clients:
+            client_socket.send("Name already in use. Disconnecting.".encode())
+            client_socket.close()
+            continue
+
+        clients[client_name] = client_socket
+        client_socket.send("Welcome to the server!".encode())
 
         # Start a new thread for each client
         client_thread = threading.Thread(target=handle_client, args=(client_socket, client_name))
