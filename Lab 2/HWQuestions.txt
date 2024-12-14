@@ -1,0 +1,5 @@
+1. What is the difference between UDP and TCP?
+
+2. What port does HTTP use?
+
+3. Attach a screenshot of wireshark sniffing a packet.

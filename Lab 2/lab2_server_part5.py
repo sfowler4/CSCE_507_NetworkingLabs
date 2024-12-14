@@ -56,6 +56,38 @@ def handle_client(client_socket, client_name):
                     else:
                         client_socket.send(f"You are not a member of group '{group_name}'.".encode())
 
+            elif message.startswith("/sendfile"):
+                _, group_name, filename = message.split(" ", 2)
+                with group_lock:
+                    if group_name in groups and client_name in groups[group_name]:
+                        # Notify the group about the incoming file
+                        for member in groups[group_name]:
+                            if member != client_name and member in clients:
+                                clients[member].send(f"[{group_name}] {client_name} is sending a file: {filename}".encode())
+                        
+                        # Receive file size
+                        file_size = int(client_socket.recv(1024).decode())
+                        print(f"Receiving file '{filename}' of size {file_size} bytes from {client_name}")
+
+                        # Receive the file data
+                        file_data = b""
+                        received = 0
+                        while received < file_size:
+                            chunk = client_socket.recv(1024)
+                            file_data += chunk
+                            received += len(chunk)
+
+                        # Send the file data to group members
+                        for member in groups[group_name]:
+                            if member != client_name and member in clients:
+                                clients[member].send(f"STARTFILE {filename} {file_size}".encode())
+                                clients[member].sendall(file_data)
+                                clients[member].send(f"ENDFILE {filename}".encode())
+                        print(f"File '{filename}' sent to group '{group_name}'")
+
+                    else:
+                        client_socket.send(f"You are not a member of group '{group_name}'.".encode())
+
             else:
                 client_socket.send("Unknown command.".encode())
 
@@ -99,6 +131,6 @@ def start_server(server_ip, server_port):
         client_thread.start()
 
 if __name__ == "__main__":
-    server_ip = "192.168.1.15"  # Replace with your machine's IP
+    server_ip = "192.168.1.15"  # Replace with your machines IP
     server_port = 8020
     start_server(server_ip, server_port)

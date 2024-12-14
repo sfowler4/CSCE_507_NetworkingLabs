@@ -1,9 +1,8 @@
 import socket
 import threading
 import tkinter as tk
-from tkinter import scrolledtext, messagebox
-import select
-import sys
+from tkinter import scrolledtext, messagebox, filedialog
+import os
 
 # Client setup
 server_ip = '192.168.1.15'  # Update with your server's IP
@@ -48,6 +47,10 @@ class ChatClientGUI:
         # Send button
         self.send_button = tk.Button(self.root, text="Send", command=self.send_message)
         self.send_button.grid(row=4, column=2, pady=5)
+
+        # File send button
+        self.send_file_button = tk.Button(self.root, text="Send File", command=self.send_file)
+        self.send_file_button.grid(row=5, column=2, pady=5)
 
         # Start receiving messages
         self.running = True
@@ -101,11 +104,32 @@ class ChatClientGUI:
         
         self.message_entry.delete(0, tk.END)
 
+    def send_file(self):
+        # Open file dialog to select file to send
+        file_path = filedialog.askopenfilename(title="Select a file to send")
+        if not file_path:
+            return
+
+        # Send file information (filename)
+        filename = os.path.basename(file_path)
+        file_size = os.path.getsize(file_path)
+        client_socket.send(f"/sendfile {filename} {file_size}".encode())
+
+        # Send file content in chunks
+        with open(file_path, "rb") as file:
+            while chunk := file.read(1024):
+                client_socket.send(chunk)
+        
+        self.display_message(f"File sent: {filename}")
+
     def receive_messages(self):
         while self.running:
             try:
                 message = client_socket.recv(1024).decode()
-                if message:
+                if message.startswith("/sendfile"):
+                    # Handle file reception
+                    self.receive_file(message)
+                elif message:
                     self.display_message(message)
                 else:
                     self.running = False
@@ -114,6 +138,21 @@ class ChatClientGUI:
                 print(f"Error receiving message: {e}")
                 self.running = False
                 break
+
+    def receive_file(self, file_info):
+        # Receive file details (filename and size)
+        _, filename, file_size = file_info.split()
+        file_size = int(file_size)
+        received_size = 0
+
+        # Receive file content in chunks
+        with open(f"received_{filename}", "wb") as file:
+            while received_size < file_size:
+                chunk = client_socket.recv(1024)
+                file.write(chunk)
+                received_size += len(chunk)
+
+        self.display_message(f"File received: {filename}")
 
     def close_connection(self):
         self.running = False
